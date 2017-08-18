@@ -9,11 +9,20 @@ using StringTools;
 
 /**
     A single, focused thing the user can do.
-*/
+**/
 @:require(js)
 class Activity {
 
-    static inline var NAME_POSTFIX = 'Activity';
+    public static inline var POSTFIX = 'Activity';
+
+    public static function boot( activity : Activity, ?container : Element ) {
+
+        if( container == null ) container = document.body;
+        container.appendChild( activity.element );
+
+        activity.onCreate();
+        activity.onStart();
+    }
 
     public var id(default,null) : String;
     public var element(default,null) : DivElement;
@@ -23,14 +32,14 @@ class Activity {
     public function new( ?id : String ) {
 
         if( id == null ) {
-            var cname = Type.getClassName( Type.getClass( this ) );
-            var i = cname.lastIndexOf( '.' );
-            if( i != -1 ) cname = cname.substring( i+1 );
-			if( cname.endsWith( NAME_POSTFIX ) ) {
-                cname = cname.substring( 0, cname.length - NAME_POSTFIX.length );
+            var className = Type.getClassName( Type.getClass( this ) );
+            var i = className.lastIndexOf( '.' );
+            if( i != -1 ) className = className.substring( i+1 );
+			if( className.endsWith( POSTFIX ) ) {
+                className = className.substring( 0, className.length - POSTFIX.length );
             } else {
                 #if debug
-                trace( 'Activity class name should end with "Activity"' );
+                throw 'Activity class name should end with "Activity"';
                 #end
             }
             //TODO
@@ -38,8 +47,8 @@ class Activity {
             // UIElement -> ui_element
             // Any_ ->
             //var expr = ~/([A-Z])/;
-            //cname = expr.replace( cname, '#');
-            id = cname.toLowerCase();
+            //className = expr.replace( className, '#');
+            id = className.toLowerCase();
         } else {
             //TODO validate id conformity
         }
@@ -54,23 +63,38 @@ class Activity {
     public function push( activity : Activity ) {
 
         activity.parent = this;
+        activity.element.classList.add( 'onCreate' );
         element.parentElement.appendChild( activity.element );
 
         activity.onCreate();
 
+        element.classList.remove( 'onStart' );
+        element.classList.add( 'onStop' );
         onStop();
+        element.remove();
 
+        activity.element.classList.remove( 'onCreate' );
+        activity.element.classList.add( 'onStart' );
         activity.onStart();
     }
 
     public function replace( activity : Activity ) {
 
+        activity.parent = parent;
+        activity.element.classList.add( 'onCreate' );
         element.parentElement.appendChild( activity.element );
 
         activity.onCreate();
+
+        element.classList.remove( 'onStart' );
+        element.classList.add( 'onStop' );
+        onStop();
+        element.remove();
+
+        activity.element.classList.remove( 'onCreate' );
+        activity.element.classList.add( 'onStart' );
         activity.onStart();
 
-        onStop();
         onDestroy();
     }
 
@@ -78,10 +102,20 @@ class Activity {
 
         if( parent != null ) {
 
+            parent.parent = parent;
+            parent.element.classList.remove( 'onStop' );
+            parent.element.classList.add( 'onCreate' );
             element.parentElement.appendChild( parent.element );
+
+            parent.element.classList.remove( 'onCreate' );
+            parent.element.classList.add( 'onStart' );
             parent.onStart();
 
+            element.classList.remove( 'onStart' );
+            element.classList.add( 'onStop' );
             onStop();
+            element.remove();
+
             onDestroy();
         }
     }
@@ -92,7 +126,6 @@ class Activity {
 
     function onStart() {
         //trace( '$id.onStart' );
-        //element.parentElement.appendChild( activity.element );
     }
 
     function onResume() {
@@ -105,7 +138,7 @@ class Activity {
 
     function onStop() {
         //trace( '$id.onStop' );
-        element.remove();
+        //element.remove();
     }
 
     function onRestart() {
@@ -116,109 +149,4 @@ class Activity {
         //trace( '$id.onDestroy' );
     }
 
-    public static function boot( activity : Activity, ?parentElement : Element ) {
-
-        if( parentElement == null ) parentElement = document.body;
-        parentElement.appendChild( activity.element );
-
-        activity.onCreate();
-        activity.onStart();
-    }
-
-    /*
-    function push( activity : Activity ) {
-
-        //activity.container = container;
-        activity.onCreate();
-        activity.onStart();
-
-        onStop();
-
-        stack.push( activity );
-
-        onDestroy();
-    }
-
-    function replace( activity : Activity ) {
-
-        //activity.container = container;
-        activity.onCreate();
-        activity.onStart();
-
-        onStop();
-
-        stack.pop();
-        stack.push( activity );
-
-        onDestroy();
-    }
-
-    function pop() {
-
-        if( stack.length >= 2 ) {
-
-            stack.pop();
-
-            var prev = stack[stack.length-1];
-            prev.onStart();
-
-            onStop();
-            stack.push( prev );
-
-            onDestroy();
-            //replace( prev );
-        }
-    }
-
-    function onCreate() {
-        trace( '$id.onCreate' );
-    }
-
-    function onStart() {
-
-        trace( '$id.onStart' );
-
-        parentElement.appendChild( element );
-
-        //window.addEventListener( 'popstate', handlePopState, false );
-
-        //window.history.replaceState( null, Type.getClassName( Type.getClass( this ) ), null );
-        //window.history.pushState( null, "DDDD", id );
-    }
-
-    function onStop() {
-
-        trace( '$id.onStop' );
-
-        parentElement.removeChild( element );
-
-        //window.removeEventListener( 'popstate', handlePopState );
-    }
-
-    function onDestroy() {
-        trace( '$id.onDestroy' );
-    }
-
-    function handlePopState(e) {
-        trace(e);
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    /*
-    static var parentElement : Element;
-    static var stack : Array<Activity>;
-
-    public static function start( activity : Activity, ?parentElement : Element ) {
-
-        if( parentElement == null ) parentElement = document.body;
-        Activity.parentElement = parentElement;
-        Activity.parentElement.appendChild( activity.element );
-
-        stack = [];
-
-        activity.onCreate();
-        activity.onStart();
-    }
-    */
 }
