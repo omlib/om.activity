@@ -66,7 +66,7 @@ class Root {
         setActiveActivity( activity );
 
         return cast activity.onCreate().then( a->{
-            activity.element.swapClasses( create, start );
+            activity.element.swapClass( create, start );
             return activity.onStart();
         });
     }
