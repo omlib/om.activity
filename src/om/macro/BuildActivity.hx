@@ -16,7 +16,7 @@ class BuildActivity {
 
                 switch field.name {
 
-                case 'onCreate':
+                case 'onCreate','onRestart','onStart','onresume','onPause','onStop','onDestroy':
 
                     if( fun.params.length == 0 ) {
                         //fun.params.push( { name: 'A', constraints:[TPath({name:'IActivity',pack:['om']})] } );
@@ -66,7 +66,7 @@ class BuildActivity {
                         if( !hasReturn ) {
                             //var fieldName = field.name;
                             //exprs.push( macro return cast super.$fieldName() );
-                            exprs.push( macro om.Promise.resolve( cast this ) );
+                            exprs.push( macro return Promise.resolve( cast this ) );
                         }
                     case _:
                     }

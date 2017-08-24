@@ -12,7 +12,10 @@ using StringTools;
 
 @:enum abstract State(String) to String {
     var create = "create";
+    var restart = "restart";
     var start = "start";
+    var resume = "resume";
+    var pause = "pause";
     var stop = "stop";
     var destroy = "destroy";
 }
@@ -59,8 +62,10 @@ class Root {
 
         activity.element.classList.add( create );
         element.append( activity.element );
+
         return cast activity.onCreate().then( a->{
             this.activity = activity;
+            activity.root = this;
             activity.element.swapClasses( create, start );
             return activity.onStart();
         });
@@ -89,6 +94,7 @@ class Activity {
     public var state(default,null) : State;
     public var element(default,null) : Element;
 
+    var root : Root;
     var parent : Activity;
 
     public function new( ?id : String ) {
@@ -113,20 +119,21 @@ class Activity {
 
     function push<A:Activity>( activity : A ) : Promise<A> {
 
-        activity.parent = this;
         activity.setState( create );
-        element.parentElement.append( activity.element );
 
         return cast activity.onCreate().then( function(a){
 
+            activity.parent = this;
             activity.setState( start );
-            setState( stop );
+            element.parentElement.append( activity.element );
 
-            return Promise.all([
-                activity.onStart(),
-                onStop()
-                //onStop().then( a->element.remove() )
-            ]);
+            setState( stop );
+            onStop().then( function(a){
+            });
+
+            return activity.onStart().then( function(a){
+                //root.activity = activity;
+            });
         });
     }
 
@@ -138,18 +145,16 @@ class Activity {
 
         return cast activity.onCreate().then( function(a){
 
-            activity.setState( start );
             setState( stop );
+            onStop().then( function(a){
+                element.remove();
+                return onDestroy();
+            });
 
-            return Promise.all([
-                activity.onStart(),
-                onStop().then( function(a){
-                    element.remove();
-                    return onDestroy().then( function(a){
-                        return Promise.resolve( cast activity );
-                    });
-                })
-            ]);
+            activity.setState( start );
+            //root.activity = activity;
+
+            return activity.onStart();
         });
     }
 
@@ -162,18 +167,22 @@ class Activity {
         element.parentElement.append( parent.element );
 
         setState( stop );
-
-        return cast Promise.all([
-            parent.onStart(),
-            onStop().then( function(a){
-                element.remove();
-                setState( destroy );
-                onDestroy();
-            })
-        ]).then( function(e){
-            trace(e);
+        onStop().then( function(a){
+            element.remove();
+            setState( destroy );
+            onDestroy();
         });
+
+        return parent.onStart();
     }
+
+    /*
+    function startForResult<A:Activity>( activity : A ) : Promise<A> {
+    }
+
+    function finish() {
+    }
+    */
 
     function setState( state : State ) {
         if( this.state != null ) element.classList.remove( this.state );
@@ -207,6 +216,11 @@ class Activity {
     function onDestroy<T>() : Promise<T> {
         return Promise.resolve( cast this );
     }
+
+    /*
+    function onActivityResult<T>( result : T ) {
+    }
+    */
 
     function createRootElement<T:Element>( _class = 'activity' ) : T {
         var e = div();
