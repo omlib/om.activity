@@ -1,152 +1,384 @@
 package om;
 
-import js.Browser.document;
-import js.Browser.window;
-import js.html.DivElement;
+import js.Promise;
 import js.html.Element;
+import js.html.DivElement;
+import js.Browser.console;
+import js.Browser.document;
+import om.DOM.*;
 
+using om.DOM;
 using StringTools;
+
+@:enum abstract State(String) to String {
+    var create = "create";
+    var start = "start";
+    var stop = "stop";
+    var destroy = "destroy";
+}
+
+/*
+interface IActivity {
+
+    var id(default,null) : String;
+    var element(default,null) : Element;
+    var state(default,null) : State;
+
+    private var parent : IActivity;
+
+    private function push<A:IActivity,T>( activity : A ) : Promise<T>;
+    private function pop<A:IActivity>() : Promise<A>;
+    //private function replace<A:IActivity,T>( activity : A, ?data : T ) : Promise<A>;
+    private function replace<A:IActivity>( activity : A ) : Promise<A>;
+    //private function back<A:IActivity>( activity : A ) : Promise<A>;
+    //private function forward<A:IActivity>( activity : A ) : Promise<A>;
+    //private function finish() : Void;
+
+    private function setState( state : State ) : Void;
+
+    private function onCreate<A:IActivity,T>() : Promise<T>;
+    private function onStart<A:IActivity,T>() : Promise<T>;
+    private function onStop<A:IActivity,T>() : Promise<T>;
+    private function onDestroy<A:IActivity,T>() : Promise<T>;
+}
+*/
+
+class Root {
+
+    public var element(default,null) : Element;
+    public var activity(default,null) : Activity;
+
+    public function new( ?element : Element ) {
+        if( element == null ) element = document.body;
+        this.element = element;
+    }
+
+    @:access(om.Activity)
+    //public function init<A:Activity,T>( activity : A ) : Promise<T> {
+    public function init<A:Activity>( activity : A ) : Promise<A> {
+
+        if( element == null ) element = document.body;
+
+        activity.element.classList.add( Activity.CLASS_CREATE );
+        element.append( activity.element );
+        return cast activity.onCreate().then( a->{
+            this.activity = activity;
+            activity.element.swapClasses( Activity.CLASS_CREATE, Activity.CLASS_START );
+            return activity.onStart();
+        });
+    }
+
+    @:access(om.Activity)
+    public function dispose<T>() : Promise<T> {
+        return if( activity == null )
+            cast Promise.reject( 'no activity' );
+            else cast activity.onStop().then( cast activity.onDestroy );
+    }
+}
 
 /**
     A single, focused thing the user can do.
 **/
-@:require(js)
+#if !macro
+@:autoBuild(om.macro.BuildActivity.complete())
+#end
+//class Activity implements Activity {
 class Activity {
 
-    public static inline var POSTFIX = 'Activity';
+    public static inline var CLASSNAME_POSTFIX = 'Activity';
 
-    public static function boot( activity : Activity, ?container : Element ) {
+    public static inline var CLASS_CREATE = 'create';
+    public static inline var CLASS_RESTART = 'restart';
+    public static inline var CLASS_START = 'start';
+    public static inline var CLASS_RESUME = 'resume';
+    public static inline var CLASS_PAUSE = 'pause';
+    public static inline var CLASS_STOP = 'stop';
+    public static inline var CLASS_DESTROY = 'destroy';
 
-        if( container == null ) container = document.body;
-        container.appendChild( activity.element );
+    /*
+    public static function init<A:Activity>( activity : A, ?element : Element ) : Promise<A> {
 
-        activity.onCreate();
-        activity.onStart();
+        if( element == null ) element = document.body;
+
+        activity.element.classList.add( Activity.CLASS_CREATE );
+        element.append( activity.element );
+
+        return cast activity.onCreate().then( function(a){
+            activity.element.swapClasses( Activity.CLASS_CREATE, Activity.CLASS_START );
+            return activity.onStart();
+        });
+        /*
+        return activity.onCreate().then( function(a){
+
+            activity.element.swapClasses( Activity.CLASS_CREATE, Activity.CLASS_START );
+
+            return activity.onStart().then( function(a){
+                trace( ">>>>>>>>" );
+                return activity.onResume().then( function(a){
+                });
+
+            });
+        });
     }
+    */
 
     public var id(default,null) : String;
-    public var element(default,null) : DivElement;
+    public var element(default,null) : Element;
+    public var state(default,null) : State;
 
     var parent : Activity;
 
     public function new( ?id : String ) {
-
         if( id == null ) {
-            var className = Type.getClassName( Type.getClass( this ) );
-            var i = className.lastIndexOf( '.' );
-            if( i != -1 ) className = className.substring( i+1 );
-			if( className.endsWith( POSTFIX ) ) {
-                className = className.substring( 0, className.length - POSTFIX.length );
+            var clName = Type.getClassName( Type.getClass( this ) );
+            var i = clName.lastIndexOf( '.' );
+            if( i != -1 ) clName = clName.substring( i+1 );
+			if( clName.endsWith( CLASSNAME_POSTFIX ) ) {
+                clName = clName.substring( 0, clName.length - CLASSNAME_POSTFIX.length );
             } else {
-                #if debug
-                throw 'Activity class name should end with "Activity"';
-                #end
+                //#if debug
+                throw 'invalid class name';
+                //#end
             }
-            //TODO
-            // MediaSet -> media_set
-            // UIElement -> ui_element
-            // Any_ ->
-            //var expr = ~/([A-Z])/;
-            //className = expr.replace( className, '#');
-            id = className.toLowerCase();
+            id = clName.toLowerCase();
         } else {
             //TODO validate id conformity
         }
-
         this.id = id;
-
-        element = document.createDivElement();
-        element.classList.add( 'activity' );
-        element.id = id;
+        element = createRootElement();
     }
 
-    public function push( activity : Activity ) {
+    function setState( state : State ) {
+        if( this.state != null ) element.classList.remove( this.state );
+        element.classList.add( this.state = state );
+    }
+
+    function push<A:Activity,T>( activity : A ) : Promise<T> {
 
         activity.parent = this;
-        activity.element.classList.add( 'onCreate' );
-        element.parentElement.appendChild( activity.element );
+        activity.setState( create );
+        element.parentElement.append( activity.element );
 
-        activity.onCreate();
+        return cast activity.onCreate().then( function(a){
 
-        element.classList.remove( 'onStart' );
-        element.classList.add( 'onStop' );
-        onStop();
-        element.remove();
+            activity.setState( start );
+            setState( stop );
 
-        activity.element.classList.remove( 'onCreate' );
-        activity.element.classList.add( 'onStart' );
-        activity.onStart();
+            return Promise.all([
+                activity.onStart(),
+                onStop()
+                //onStop().then( a->element.remove() )
+            ]);
+            /*
+            return activity.onStart().then( function(a){
+                return onStop().then( function(a){
+                    element.remove();
+                });
+            });
+            */
+        });
     }
 
-    public function replace( activity : Activity ) {
+    function replace<A:Activity>( activity : A ) : Promise<A> {
 
         activity.parent = parent;
-        activity.element.classList.add( 'onCreate' );
-        element.parentElement.appendChild( activity.element );
+        activity.setState( create );
+        element.parentElement.append( activity.element );
 
-        activity.onCreate();
+        return cast activity.onCreate().then( function(a){
 
-        element.classList.remove( 'onStart' );
-        element.classList.add( 'onStop' );
-        onStop();
-        element.remove();
+            activity.setState( start );
+            setState( stop );
 
-        activity.element.classList.remove( 'onCreate' );
-        activity.element.classList.add( 'onStart' );
-        activity.onStart();
+            return Promise.all([
+                activity.onStart(),
+                onStop().then( function(a){
+                    element.remove();
+                    return onDestroy().then( function(a){
+                        return Promise.resolve( cast activity );
+                    });
+                })
+            ]);
 
-        onDestroy();
+            /*
+            return activity.onStart().then( function(a){
+
+                setState( stop );
+                //activity.element.swapClasses( CLASS_START, CLASS_RESUME );
+                //activity.onResume( function(_){});
+
+                return onStop().then( function(a){
+                    element.remove();
+                    return onDestroy().then( function(a){
+                        return Promise.resolve( cast activity );
+                    });
+                });
+            });
+            */
+
+            /*
+            return onStop().then( function(a){
+
+                //element.swapClasses( CLASS_STOP, CLASS_DESTROY );
+                element.remove();
+                onDestroy();
+
+                return activity.onStart().then( function(a){
+                    //activity.element.swapClasses( CLASS_START, CLASS_RESUME );
+                    //activity.onResume( function(_){});
+                    //return Promise.resolve( activity );
+                });
+            });
+            */
+        });
     }
 
-    public function pop() {
+    function pop<A:Activity>() : Promise<A> {
 
-        if( parent != null ) {
+        if( parent == null )
+            return Promise.reject( 'no parent' );
 
-            parent.parent = parent;
-            parent.element.classList.remove( 'onStop' );
-            parent.element.classList.add( 'onCreate' );
-            element.parentElement.appendChild( parent.element );
+        parent.state = start;
+        parent.element.swapClasses( CLASS_STOP, CLASS_START );
+        element.parentElement.append( parent.element );
 
-            parent.element.classList.remove( 'onCreate' );
-            parent.element.classList.add( 'onStart' );
-            parent.onStart();
+        element.swapClasses( CLASS_START, CLASS_STOP );
+        state = stop;
 
-            element.classList.remove( 'onStart' );
-            element.classList.add( 'onStop' );
-            onStop();
-            element.remove();
+        return cast Promise.all([
+            parent.onStart(),
+            onStop().then( function(a){
+                element.swapClasses( CLASS_STOP, CLASS_DESTROY );
+                element.remove();
+                onDestroy();
+            })
+        ]).then( function(e){
+            trace(e);
+        });
 
-            onDestroy();
-        }
+        /*
+        return cast parent.onStart().then( function(a){
+            return onStop().then( function(a){
+                element.swapClasses( CLASS_STOP, CLASS_DESTROY );
+                element.remove();
+                onDestroy();
+            });
+        });
+        */
     }
 
-    function onCreate() {
-        //trace( '$id.onCreate' );
+
+    /*
+    public function push<A:Activity>( activity : A ) : Promise<A> {
+        return cast _changeCurrent( activity, this );
     }
 
-    function onStart() {
-        //trace( '$id.onStart' );
+    public function replace<A:Activity,T>( activity : A, ?data : T ) : Promise<A> {
+        return cast _changeCurrent( activity, parent, data ).then( function(_){
+            return onDestroy();
+            //return onDestroy().then( function(_){
+                //return Promise.resolve( activity );
+            //});
+        });
     }
 
-    function onResume() {
-        //trace( '$id.onResume' );
+    function _changeCurrent<A:Activity,T>( next : A, ?parent : Activity, ?data : T ) : Promise<A> {
+
+        next.parent = parent;
+        next.element.classList.add( CLASS_CREATE );
+        element.parentElement.appendChild( next.element );
+
+        element.classList.remove( CLASS_START );
+        element.classList.add( CLASS_STOP );
+
+        return next.onCreate().then( function(a){
+
+            next.element.classList.remove( CLASS_CREATE );
+            next.element.classList.add( CLASS_START );
+
+            /*
+            return cast Promise.all( [
+                next.onStart(),
+                onStop().then( function(a){
+                    element.classList.remove( CLASS_STOP );
+                    element.remove();
+                }),
+            ] );
+            * /
+
+            next.onStart();
+            onStop().then( function(a){
+                element.classList.remove( CLASS_STOP );
+                element.remove();
+            });
+
+            return Promise.resolve( next );
+        });
     }
 
-    function onPause() {
-        //trace( '$id.onPause' );
+    function pop<A:Activity>() : Promise<A> {
+
+        if( parent == null )
+            return Promise.reject( 'no parent' );
+
+        parent.element.classList.add( CLASS_START );
+        element.parentElement.appendChild( parent.element );
+
+        element.classList.add( CLASS_STOP );
+
+        return cast Promise.all( [
+            parent.onStart(),
+            onStop().then( function(a){
+                element.classList.remove( CLASS_STOP );
+                element.remove();
+                return onDestroy();
+            }),
+        ] );
+    }
+    */
+
+    /*
+    function finish() {
+        //TODO
+    }
+    */
+
+    //function onCreate<A:Activity,T>( ?data : T ) : Promise<A> {
+    function onCreate<A:Activity,T>() : Promise<T> {
+        //return Promise.resolve(  this );
+        return null;
     }
 
-    function onStop() {
-        //trace( '$id.onStop' );
-        //element.remove();
+    function onStart<A:Activity,T>() : Promise<T> {
+        return Promise.resolve( cast this );
     }
 
-    function onRestart() {
-        //trace( '$id.onRestart' );
+    function onRestart<A:Activity,T>() : Promise<T> {
+        return Promise.resolve( cast this );
     }
 
-    function onDestroy() {
-        //trace( '$id.onDestroy' );
+    function onResume<A:Activity,T>() : Promise<T> {
+        return Promise.resolve( cast this );
     }
 
+    function onPause<A:Activity,T>() : Promise<T> {
+        return Promise.resolve( cast this );
+    }
+
+    function onStop<A:Activity,T>() : Promise<T> {
+        return Promise.resolve( cast this );
+    }
+
+    function onDestroy<A:Activity,T>() : Promise<T> {
+        return Promise.resolve( cast this );
+    }
+
+    //function onActivityResult<A:Activity>( activity : T ) {
+
+    function createRootElement<T:Element>( cl = 'activity' ) : T {
+        var e = div();
+        if( cl != null ) e.classList.add( cl );
+        e.id = id;
+        return cast e;
+    }
 }
