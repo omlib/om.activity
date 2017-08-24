@@ -13,19 +13,15 @@ class BuildActivity {
         for( field in fields ) {
             switch field.kind {
             case FFun(fun):
-
                 switch field.name {
-
-                case 'onCreate','onRestart','onStart','onresume','onPause','onStop','onDestroy':
-
+                case 'onCreate','onRestart','onStart','onResume','onPause','onStop','onDestroy':
+                    /*
                     if( fun.params.length == 0 ) {
                         //fun.params.push( { name: 'A', constraints:[TPath({name:'IActivity',pack:['om']})] } );
                         //fun.params.push( { name: 'T' } );
                         //fun.params.push( { name: 'A' } );
                     }
-
                     // Add ?state argument if missing
-                    /*
                     if( fun.args.length == 0 ) {
                         fun.args.push({
                             name: '_',
@@ -35,8 +31,6 @@ class BuildActivity {
                         });
                     }
                     */
-
-                    // Add return if missing
                     var hasReturn = false;
                     switch fun.expr.expr {
                     case EBlock(exprs):
@@ -44,7 +38,6 @@ class BuildActivity {
                         switch last.expr {
                         case EReturn(ret):
                             hasReturn = true;
-                            break;
                             /*
                             switch ret.expr {
                             case ECast(e,t):
@@ -61,17 +54,18 @@ class BuildActivity {
                             case _:
                             }
                             */
-                        case _:
+                        default:
                         }
                         if( !hasReturn ) {
                             //var fieldName = field.name;
                             //exprs.push( macro return cast super.$fieldName() );
                             exprs.push( macro return Promise.resolve( cast this ) );
                         }
-                    case _:
+                    default:
                     }
+                default:
                 }
-            case _:
+            default:
             }
         }
 
