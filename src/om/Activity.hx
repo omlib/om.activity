@@ -63,9 +63,9 @@ class Root {
         activity.element.classList.add( create );
         element.append( activity.element );
 
+        setActiveActivity( activity );
+
         return cast activity.onCreate().then( a->{
-            this.activity = activity;
-            activity.root = this;
             activity.element.swapClasses( create, start );
             return activity.onStart();
         });
@@ -76,6 +76,13 @@ class Root {
         return if( activity == null )
             cast Promise.reject( 'no activity' );
             else cast activity.onStop().then( cast activity.onDestroy );
+    }
+
+    @:allow(om.Activity)
+    @:access(om.Activity)
+    inline function setActiveActivity( activity : Activity ) {
+        this.activity = activity;
+        activity.root = this;
     }
 }
 
@@ -131,9 +138,9 @@ class Activity {
             onStop().then( function(a){
             });
 
-            return activity.onStart().then( function(a){
-                //root.activity = activity;
-            });
+            root.setActiveActivity( activity );
+
+            return activity.onStart();
         });
     }
 
@@ -152,7 +159,7 @@ class Activity {
             });
 
             activity.setState( start );
-            //root.activity = activity;
+            root.setActiveActivity( activity );
 
             return activity.onStart();
         });
@@ -173,7 +180,9 @@ class Activity {
             onDestroy();
         });
 
-        return parent.onStart();
+        root.setActiveActivity( parent );
+
+        return cast parent.onStart();
     }
 
     /*
