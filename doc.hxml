@@ -1,0 +1,10 @@
+--no-output
+-lib om.activity
+om.Activity
+-D doc
+-D doc-gen
+--each
+
+--next
+-js x
+-xml doc/js.xml
